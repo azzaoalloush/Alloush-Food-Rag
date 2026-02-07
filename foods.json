@@ -448,5 +448,95 @@
   "text": "Suutei tsai is a traditional Mongolian milk tea made with green tea, milk, water, and salt.",
   "region": "Mongolia",
   "type": "Beverage"
+},
+{
+  "id": "76",
+  "text": "Kabsa is a fragrant rice dish with meat, vegetables, and spices.",
+  "region": "Middle East",
+  "type": "Main Dish"
+},
+{
+  "id": "77",
+  "text": "Kibbeh is a fried or baked croquettes made from bulgur wheat, onions, and minced meat.",
+  "region": "Middle East",
+  "type": "Dessert"
+},
+{
+  "id": "78",
+  "text": "Mansaf is a traditional Jordanian dish made of lamb cooked in a sauce of fermented dried yogurt and served with rice.",
+  "region": "Middle East",
+  "type": "Main Course"
+},
+{
+  "id": "79",
+  "text": "Fattoush is a Levantine salad made with mixed greens, tomatoes, cucumbers, radishes, and toasted pita bread.",
+  "region": "Middle East",
+  "type": "Salad"
+},
+{
+  "id": "80",
+  "text": "Kunafa is a Middle Eastern dessert made with thin noodle-like pastry soaked in sweet syrup and layered with cheese or nuts.",
+  "region": "Middle East",
+  "type": "Dessert"
+},
+{
+  "id": "81",
+  "text": "Shakshuka is a dish where eggs are poached in spiced tomato sauce with peppers, providing high-quality protein, lycopene for heart health, and vitamin C for immune support.",
+  "region": "Middle East",
+  "type": "Main Course"
+},
+{
+  "id": "82",
+  "text": "Gado-Gado is an Indonesian salad with blanched vegetables, tofu, and peanut sauce, offering plant-based protein, healthy fats, fiber, and diverse micronutrients from varied vegetables.",
+  "region": "Indonesia",
+  "type": "Main Course"
+},
+{
+  "id": "83",
+  "text": "Baba Ganoush is a roasted eggplant dip with tahini, rich in antioxidants, fiber, calcium from sesame seeds, and heart-healthy monounsaturated fats.",
+  "region": "Middle East",
+  "type": "Side Dish"
+},
+{
+  "id": "84",
+  "text": "Poke Bowl is raw fish with rice and vegetables, providing omega-3 fatty acids for brain health, lean protein, and antioxidants from fresh produce.",
+  "region": "Hawaii",
+  "type": "Main Course"
+},
+{
+  "id": "85",
+  "text": "Dahl is spiced lentil stew loaded with plant-based protein, iron, folate, resistant starch for gut health, and anti-inflammatory spices like turmeric.",
+  "region": "India",
+  "type": "Main Course"
+},
+{
+  "id": "86",
+  "text": "Paella is rice slowly simmered with saffron, seafood or meat, and vegetables in a wide shallow pan until the bottom forms a crispy crust.",
+  "region": "Spain",
+  "type": "Main Course"
+},
+{
+  "id": "87",
+  "text": "Beef Bourguignon is beef chunks braised low and slow in red wine with mushrooms, onions, and herbs until fork-tender.",
+  "region": "France",
+  "type": "Main Course"
+},
+{
+  "id": "88",
+  "text": "Moussaka is a layered eggplant, spiced meat, and béchamel sauce baked in the oven until golden and bubbling.",
+  "region": "Greece",
+  "type": "Main Course"
+},
+{
+  "id": "89",
+  "text": "Cacio e Pepe is pasta tossed with reserved starchy pasta water, pecorino cheese, and black pepper to create a creamy emulsified sauce.",
+  "region": "Italy",
+  "type": "Main Course"
+},
+{
+  "id": "90",
+  "text": "Tiramisu is ladyfinger cookies soaked in espresso, layered with whipped mascarpone cream, and chilled until set.",
+  "region": "Italy",
+  "type": "Dessert"
 }
 ]
