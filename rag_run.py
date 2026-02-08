@@ -14,6 +14,15 @@ JSON_FILE = os.path.join(SCRIPT_DIR, "foods.json")
 EMBED_MODEL = "mxbai-embed-large"
 LLM_MODEL = "llama3.2"
 
+# Verify Ollama is running
+def check_ollama_connection():
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        response.raise_for_status()
+        return True
+    except Exception:
+        return False
+
 # Load data
 with open(JSON_FILE, "r", encoding="utf-8") as f:
     food_data = json.load(f)
@@ -24,11 +33,28 @@ collection = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
 
 # Ollama embedding function
 def get_embedding(text):
-    response = requests.post("http://localhost:11434/api/embeddings", json={
-        "model": EMBED_MODEL,
-        "prompt": text
-    })
-    return response.json()["embedding"]
+    try:
+        response = requests.post("http://localhost:11434/api/embeddings", json={
+            "model": EMBED_MODEL,
+            "prompt": text
+        }, timeout=10)
+        response.raise_for_status()
+        return response.json()["embedding"]
+    except requests.exceptions.ConnectionError:
+        raise Exception(f"ERROR: Cannot connect to Ollama at localhost:11434. Please start Ollama first.")
+    except requests.exceptions.Timeout:
+        raise Exception("ERROR: Ollama request timed out. Please ensure Ollama is running properly.")
+    except Exception as e:
+        raise Exception(f"ERROR: Failed to get embedding from Ollama: {str(e)}")
+
+# Check if Ollama is running before processing
+if not check_ollama_connection():
+    print("[ERROR] Ollama is not running at http://localhost:11434")
+    print("Please start Ollama first by running: ollama serve")
+    print("Then ensure the embedding model is available: ollama pull mxbai-embed-large")
+    print("And the LLM model is available: ollama pull llama3.2")
+    print("\nApplication will still launch, but embedding operations will fail.")
+    print("=" * 60)
 
 # Add only new items
 existing_ids = set(collection.get()['ids'])
@@ -97,11 +123,19 @@ Question: {question}
 Answer:"""
 
         # Step 6: Generate answer with Ollama (streaming)
-        response = requests.post("http://localhost:11434/api/generate", json={
-            "model": LLM_MODEL,
-            "prompt": prompt,
-            "stream": True
-        }, stream=True, timeout=60)
+        try:
+            response = requests.post("http://localhost:11434/api/generate", json={
+                "model": LLM_MODEL,
+                "prompt": prompt,
+                "stream": True
+            }, stream=True, timeout=60)
+            response.raise_for_status()
+        except requests.exceptions.ConnectionError:
+            raise Exception(f"ERROR: Cannot connect to Ollama at localhost:11434. Please start Ollama first.")
+        except requests.exceptions.Timeout:
+            raise Exception("ERROR: Ollama request timed out. The query took too long to complete.")
+        except Exception as e:
+            raise Exception(f"ERROR: Failed to generate answer from Ollama: {str(e)}")
 
         # Step 7: Stream response and update GUI
         full_response = ""

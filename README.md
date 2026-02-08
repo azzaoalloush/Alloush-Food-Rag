@@ -137,7 +137,7 @@ print(rag_query("Which foods are spicy and vegetarian?"))
 
 ## 👨‍🍳 Credits
 
-Made by Callum using:
+Made by azzaoalloush (azzaoalloush@gmail.com) using:
 
 * [Ollama](https://ollama.com)
 * [ChromaDB](https://www.trychroma.com)
