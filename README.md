@@ -1,11 +1,13 @@
-Here’s a clear, beginner-friendly `README.md` for your RAG project, designed to explain what it does, how it works, and how someone can run it from scratch.
+# 🧠 RAG-Food: Simple Retrieval-Augmented Generation with ChromaDB + Ollama
+
+## 📝 Recent Changes
+
+- ✅ Updated credentials to username: `azzaoalloush`, email: `azzaoalloush@gmail.com`
+- ✅ Created `.env` file for secure credential storage (ignored by git)
+- ✅ Added comprehensive documentation with screenshots
+- ✅ Updated project files and enhanced RAG GUI
 
 ---
-
-## 📄 `README.md`
-
-````markdown
-# 🧠 RAG-Food: Simple Retrieval-Augmented Generation with ChromaDB + Ollama
 
 This is a **minimal working RAG (Retrieval-Augmented Generation)** demo using:
 
