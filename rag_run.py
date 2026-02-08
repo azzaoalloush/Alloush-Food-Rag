@@ -1,11 +1,12 @@
 import os
 import json
-import requests
+import time
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import threading
 from dotenv import load_dotenv
 from upstash_vector import Index
+from groq import Groq
 
 # Load environment variables
 load_dotenv()
@@ -13,16 +14,8 @@ load_dotenv()
 # Constants
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_FILE = os.path.join(SCRIPT_DIR, "foods.json")
-LLM_MODEL = "llama3.2"
-
-# Verify Ollama is running
-def check_ollama_connection():
-    try:
-        response = requests.get("http://localhost:11434/api/tags", timeout=5)
-        response.raise_for_status()
-        return True
-    except Exception:
-        return False
+LLM_MODEL = "llama-3.1-8b-instant"
+GROQ_RATE_LIMIT_WAIT = 1  # seconds between requests if rate limited
 
 # Load data
 with open(JSON_FILE, "r", encoding="utf-8") as f:
@@ -39,6 +32,15 @@ except Exception as e:
     print(f"[ERROR] Failed to initialize Upstash Vector: {e}")
     print("Please ensure UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN are set in .env")
     vector_index = None
+
+# Setup Groq LLM Client
+try:
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    print("[OK] Groq client initialized")
+except Exception as e:
+    print(f"[ERROR] Failed to initialize Groq client: {e}")
+    print("Please ensure GROQ_API_KEY is set in .env")
+    groq_client = None
 
 # Initialize food data in vector database
 def initialize_vector_db():
@@ -77,23 +79,23 @@ def initialize_vector_db():
         print(f"[ERROR] Failed to upsert to Upstash Vector: {e}")
         return False
 
-# Check if Ollama is running before processing
-if not check_ollama_connection():
-    print("[WARN] Ollama is not running at http://localhost:11434")
-    print("Please start Ollama first by running: ollama serve")
-    print("Note: Ollama is now ONLY needed for LLM generation, not embeddings.")
-    print("Embeddings are handled by Upstash Vector automatically.")
-    print("=" * 60)
-
 # Initialize vector database with food data
 initialize_vector_db()
 
+# Note: Ollama is no longer needed
+print("[INFO] Ollama has been replaced with Groq Cloud API for LLM generation")
+print("[INFO] Embeddings are handled by Upstash Vector automatically")
+print("=" * 60)
+
 # RAG query function
 def rag_query(question, gui_callback=None):
-    """Query the RAG system using Upstash Vector and optionally update GUI with results."""
+    """Query the RAG system using Upstash Vector and Groq LLM."""
     try:
         if not vector_index:
             raise Exception("ERROR: Vector database not initialized")
+        
+        if not groq_client:
+            raise Exception("ERROR: Groq client not initialized. Check GROQ_API_KEY in .env")
 
         # Step 1: Query Upstash Vector with raw text (embedding done server-side)
         results = vector_index.query(
@@ -117,7 +119,7 @@ def rag_query(question, gui_callback=None):
 
         # Step 4: Build prompt from context
         context = "\n".join(top_docs)
-        prompt = f"""Use the following context to answer the question.
+        user_message = f"""Use the following context to answer the question.
 
 Context:
 {context}
@@ -125,36 +127,46 @@ Context:
 Question: {question}
 Answer:"""
 
-        # Step 5: Generate answer with Ollama (streaming)
+        # Step 5: Query Groq with streaming
         try:
-            response = requests.post("http://localhost:11434/api/generate", json={
-                "model": LLM_MODEL,
-                "prompt": prompt,
-                "stream": True
-            }, stream=True, timeout=60)
-            response.raise_for_status()
-        except requests.exceptions.ConnectionError:
-            raise Exception(f"ERROR: Cannot connect to Ollama at localhost:11434. Please start Ollama first.")
-        except requests.exceptions.Timeout:
-            raise Exception("ERROR: Ollama request timed out. The query took too long to complete.")
+            stream = groq_client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful food expert. Answer questions about food based on the provided context."
+                    },
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=1024,
+                stream=True,
+                stop=None
+            )
         except Exception as e:
-            raise Exception(f"ERROR: Failed to generate answer from Ollama: {str(e)}")
+            if "401" in str(e):
+                raise Exception("ERROR: Invalid Groq API key. Check GROQ_API_KEY in .env")
+            elif "429" in str(e):
+                raise Exception("ERROR: Groq API rate limited. Please wait before retrying.")
+            elif "503" in str(e):
+                raise Exception("ERROR: Groq API temporarily unavailable. Please try again.")
+            else:
+                raise Exception(f"ERROR: Groq API error: {str(e)}")
 
         # Step 6: Stream response and update GUI
         full_response = ""
         if gui_callback:
             gui_callback("answer_start", "")
         
-        for line in response.iter_lines():
-            if line:
-                try:
-                    chunk = json.loads(line)
-                    response_text = chunk.get("response", "")
-                    full_response += response_text
-                    if gui_callback:
-                        gui_callback("answer_update", response_text)
-                except json.JSONDecodeError:
-                    continue
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                if gui_callback:
+                    gui_callback("answer_update", content)
         
         return full_response.strip()
     
@@ -169,7 +181,7 @@ Answer:"""
 class RAGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("RAG Food Q&A - Upstash Vector + Ollama")
+        self.root.title("RAG Food Q&A - Upstash + Groq")
         self.root.geometry("1000x700")
         
         # Question input
