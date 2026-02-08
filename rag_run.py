@@ -1,17 +1,18 @@
 import os
 import json
-import chromadb
 import requests
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import threading
+from dotenv import load_dotenv
+from upstash_vector import Index
+
+# Load environment variables
+load_dotenv()
 
 # Constants
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CHROMA_DIR = os.path.join(SCRIPT_DIR, "chroma_db")
-COLLECTION_NAME = "foods"
 JSON_FILE = os.path.join(SCRIPT_DIR, "foods.json")
-EMBED_MODEL = "mxbai-embed-large"
 LLM_MODEL = "llama3.2"
 
 # Verify Ollama is running
@@ -27,92 +28,94 @@ def check_ollama_connection():
 with open(JSON_FILE, "r", encoding="utf-8") as f:
     food_data = json.load(f)
 
-# Setup ChromaDB
-chroma_client = chromadb.PersistentClient(path=CHROMA_DIR)
-collection = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
+# Setup Upstash Vector
+try:
+    vector_index = Index(
+        url=os.getenv("UPSTASH_VECTOR_REST_URL"),
+        token=os.getenv("UPSTASH_VECTOR_REST_TOKEN"),
+    )
+    print("[OK] Connected to Upstash Vector")
+except Exception as e:
+    print(f"[ERROR] Failed to initialize Upstash Vector: {e}")
+    print("Please ensure UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN are set in .env")
+    vector_index = None
 
-# Ollama embedding function
-def get_embedding(text):
-    try:
-        response = requests.post("http://localhost:11434/api/embeddings", json={
-            "model": EMBED_MODEL,
-            "prompt": text
-        }, timeout=10)
-        response.raise_for_status()
-        return response.json()["embedding"]
-    except requests.exceptions.ConnectionError:
-        raise Exception(f"ERROR: Cannot connect to Ollama at localhost:11434. Please start Ollama first.")
-    except requests.exceptions.Timeout:
-        raise Exception("ERROR: Ollama request timed out. Please ensure Ollama is running properly.")
-    except Exception as e:
-        raise Exception(f"ERROR: Failed to get embedding from Ollama: {str(e)}")
-
-# Check if Ollama is running before processing
-if not check_ollama_connection():
-    print("[ERROR] Ollama is not running at http://localhost:11434")
-    print("Please start Ollama first by running: ollama serve")
-    print("Then ensure the embedding model is available: ollama pull mxbai-embed-large")
-    print("And the LLM model is available: ollama pull llama3.2")
-    print("\nApplication will still launch, but embedding operations will fail.")
-    print("=" * 60)
-
-# Add only new items
-existing_ids = set(collection.get()['ids'])
-new_items = [item for item in food_data if item['id'] not in existing_ids]
-
-if new_items:
-    print(f"[NEW] Adding {len(new_items)} new documents to Chroma...")
+# Initialize food data in vector database
+def initialize_vector_db():
+    """Upsert all food items to Upstash Vector (embeddings are automatic)"""
+    if not vector_index:
+        print("[ERROR] Vector database not available")
+        return False
     
-    # Batch process embeddings
-    documents = []
-    ids = []
-    embeddings = []
+    print(f"[INFO] Preparing {len(food_data)} food items...")
     
-    for item in new_items:
-        # Enhance text with region/type
+    vectors_to_upsert = []
+    for item in food_data:
+        # Enhance text with region/type (same as before)
         enriched_text = item["text"]
         if "region" in item:
             enriched_text += f" This food is popular in {item['region']}."
         if "type" in item:
             enriched_text += f" It is a type of {item['type']}."
         
-        emb = get_embedding(enriched_text)
-        documents.append(item["text"])
-        embeddings.append(emb)
-        ids.append(item["id"])
+        # Prepare for Upstash (raw text, no embedding needed)
+        vectors_to_upsert.append({
+            "id": item["id"],
+            "text": enriched_text,
+            "metadata": {
+                "original_id": item["id"],
+                "region": item.get("region", "Unknown"),
+                "type": item.get("type", "Unknown"),
+            }
+        })
     
-    # Add all at once
-    collection.add(
-        documents=documents,
-        embeddings=embeddings,
-        ids=ids
-    )
-else:
-    print("[OK] All documents already in ChromaDB.")
+    try:
+        vector_index.upsert(vectors_to_upsert)
+        print(f"[OK] Upserted {len(vectors_to_upsert)} items to Upstash Vector")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to upsert to Upstash Vector: {e}")
+        return False
+
+# Check if Ollama is running before processing
+if not check_ollama_connection():
+    print("[WARN] Ollama is not running at http://localhost:11434")
+    print("Please start Ollama first by running: ollama serve")
+    print("Note: Ollama is now ONLY needed for LLM generation, not embeddings.")
+    print("Embeddings are handled by Upstash Vector automatically.")
+    print("=" * 60)
+
+# Initialize vector database with food data
+initialize_vector_db()
 
 # RAG query function
 def rag_query(question, gui_callback=None):
-    """Query the RAG system and optionally update GUI with results."""
+    """Query the RAG system using Upstash Vector and optionally update GUI with results."""
     try:
-        # Step 1: Embed the user question
-        q_emb = get_embedding(question)
+        if not vector_index:
+            raise Exception("ERROR: Vector database not initialized")
 
-        # Step 2: Query the vector DB
-        results = collection.query(query_embeddings=[q_emb], n_results=3)
+        # Step 1: Query Upstash Vector with raw text (embedding done server-side)
+        results = vector_index.query(
+            data=question,
+            top_k=3,
+            include_metadata=True
+        )
 
-        # Step 3: Extract documents
-        top_docs = results['documents'][0]
-        top_ids = results['ids'][0]
+        # Step 2: Extract documents from Upstash response format
+        top_docs = [r["text"] for r in results]
+        top_ids = [r["id"] for r in results]
+        top_scores = [r["score"] for r in results]
 
-        # Step 4: Display retrieved documents in GUI
-        sources_text = "[SOURCES]\n"
-        for i, doc in enumerate(top_docs):
-            sources_text += f"\n[{i + 1}] ID: {top_ids[i]}\n    {doc}\n"
+        # Step 3: Display retrieved documents in GUI
+        sources_text = "[SOURCES & RELEVANCE]\n"
+        for i, (doc, score) in enumerate(zip(top_docs, top_scores)):
+            sources_text += f"\n[{i + 1}] (Relevance: {score:.2f})\n    {doc}\n"
         
         if gui_callback:
             gui_callback("sources", sources_text)
 
-        # Step 5: Build prompt from context
+        # Step 4: Build prompt from context
         context = "\n".join(top_docs)
         prompt = f"""Use the following context to answer the question.
 
@@ -122,7 +125,7 @@ Context:
 Question: {question}
 Answer:"""
 
-        # Step 6: Generate answer with Ollama (streaming)
+        # Step 5: Generate answer with Ollama (streaming)
         try:
             response = requests.post("http://localhost:11434/api/generate", json={
                 "model": LLM_MODEL,
@@ -137,7 +140,7 @@ Answer:"""
         except Exception as e:
             raise Exception(f"ERROR: Failed to generate answer from Ollama: {str(e)}")
 
-        # Step 7: Stream response and update GUI
+        # Step 6: Stream response and update GUI
         full_response = ""
         if gui_callback:
             gui_callback("answer_start", "")
@@ -166,7 +169,7 @@ Answer:"""
 class RAGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("RAG Food Q&A")
+        self.root.title("RAG Food Q&A - Upstash Vector + Ollama")
         self.root.geometry("1000x700")
         
         # Question input
