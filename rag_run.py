@@ -49,39 +49,51 @@ except Exception as e:
 
 # Initialize food data in vector database
 def initialize_vector_db():
-    """Upsert all food items to Upstash Vector (embeddings are automatic)"""
+    """Verify all food items are in Upstash Vector (embeddings are automatic per BGE model)"""
     if not vector_index:
         print("[ERROR] Vector database not available")
         return False
     
-    print(f"[INFO] Preparing {len(food_data)} food items...")
-    
-    vectors_to_upsert = []
-    for item in food_data:
-        # Enhance text with region/type (same as before)
-        enriched_text = item["text"]
-        if "region" in item:
-            enriched_text += f" This food is popular in {item['region']}."
-        if "type" in item:
-            enriched_text += f" It is a type of {item['type']}."
-        
-        # Prepare for Upstash (raw text, no embedding needed)
-        vectors_to_upsert.append({
-            "id": item["id"],
-            "text": enriched_text,
-            "metadata": {
-                "original_id": item["id"],
-                "region": item.get("region", "Unknown"),
-                "type": item.get("type", "Unknown"),
-            }
-        })
-    
     try:
-        vector_index.upsert(vectors_to_upsert)
-        print(f"[OK] Upserted {len(vectors_to_upsert)} items to Upstash Vector")
-        return True
+        # Check current index status
+        info = vector_index.info()
+        vector_count = info.vector_count if hasattr(info, 'vector_count') else 0
+        
+        if vector_count == 0:
+            print(f"[INFO] Vector DB is empty. Ingesting {len(food_data)} food items...")
+            
+            vectors_to_upsert = []
+            for i, item in enumerate(food_data):
+                # Enhance text with region/type for better semantic search
+                enriched_text = item.get("text", "")
+                if "region" in item:
+                    enriched_text += f" This food is popular in {item['region']}."
+                if "type" in item:
+                    enriched_text += f" It is a type of {item['type']}."
+                
+                # Use 'data' for auto-embedding, store text in metadata for retrieval
+                vectors_to_upsert.append({
+                    "id": str(i),
+                    "data": enriched_text,  # Upstash will auto-embed this
+                    "metadata": {
+                        "text": enriched_text,  # Store original text for retrieval
+                        "original_id": item.get("id", str(i))
+                    }
+                })
+            
+            # Upsert in batches
+            batch_size = 10
+            for batch_idx in range(0, len(vectors_to_upsert), batch_size):
+                batch = vectors_to_upsert[batch_idx:batch_idx + batch_size]
+                vector_index.upsert(vectors=batch)
+            
+            print(f"[OK] Ingested {len(vectors_to_upsert)} items to Upstash Vector")
+            return True
+        else:
+            print(f"[OK] Vector DB has {vector_count} vectors ready")
+            return True
     except Exception as e:
-        print(f"[ERROR] Failed to upsert to Upstash Vector: {e}")
+        print(f"[ERROR] Vector DB initialization: {e}")
         return False
 
 # Initialize vector database with food data
@@ -111,31 +123,51 @@ def rag_query(question, gui_callback=None):
                     include_metadata=True
                 )
                 
-                if results:
-                    top_docs = [r["text"] for r in results]
-                    top_scores = [r.get("score", 0) for r in results]
+                if results and len(results) > 0:
+                    top_docs = []
+                    top_scores = []
                     
-                    # Display sources
-                    sources_text = "[SOURCES & RELEVANCE]\n"
-                    for i, (doc, score) in enumerate(zip(top_docs, top_scores)):
-                        sources_text += f"\n[{i + 1}] (Relevance: {score:.2f})\n    {doc}\n"
+                    # Extract text from QueryResult objects by using ID to look up food_data
+                    for r in results:
+                        try:
+                            # Get text from food_data using the ID
+                            result_id = int(r.id) if hasattr(r, 'id') else None
+                            if result_id is not None and result_id < len(food_data):
+                                food_item = food_data[result_id]
+                                text = food_item.get("text", "")
+                                if "region" in food_item:
+                                    text += f" This food is popular in {food_item['region']}."
+                                if "type" in food_item:
+                                    text += f" It is a type of {food_item['type']}."
+                                
+                                top_docs.append(text)
+                                score = getattr(r, 'score', 0)
+                                top_scores.append(score)
+                        except (ValueError, IndexError, KeyError, TypeError):
+                            continue
                     
-                    if gui_callback:
-                        gui_callback("sources", sources_text)
-                    
-                    context = "\n".join(top_docs)
-                    use_vector_db = True
+                    if top_docs:
+                        # Display sources
+                        sources_text = "[SOURCES & RELEVANCE]\n"
+                        for i, (doc, score) in enumerate(zip(top_docs, top_scores)):
+                            sources_text += f"\n[{i + 1}] (Relevance: {score:.2f})\n    {doc[:100]}...\n"
+                        
+                        if gui_callback:
+                            gui_callback("sources", sources_text)
+                        
+                        context = "\n".join(top_docs)
+                        use_vector_db = True
                     
             except Exception as vector_err:
-                # Vector DB auth/access error - fallback to demo mode
+                # Vector DB query error - fallback to keyword search
                 error_msg = str(vector_err)
-                if "Unauthorized" in error_msg or "invalid" in error_msg.lower():
+                if "Unauthorized" in error_msg:
                     if gui_callback:
-                        sources_msg = "[SOURCES] Vector DB temporarily unavailable.\nUsing base knowledge from food database.\nAction: Update Vector credentials in .env and restart.\n"
+                        sources_msg = "[SOURCES] Vector DB authentication failed.\nUsing keyword matching from food database.\n"
                         gui_callback("sources", sources_msg)
                 else:
                     if gui_callback:
-                        gui_callback("sources", f"[INFO] Vector query issue: {error_msg[:100]}...\n\nUsing base food knowledge to answer.\n")
+                        gui_callback("sources", f"[INFO] Using keyword matching (Vector query: {error_msg[:80]}...)\n")
         
         # Step 2: If no Vector DB context, use fallback from food_data
         if not context:
