@@ -5,7 +5,8 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import threading
 from dotenv import load_dotenv
-from upstash_vector import Index
+import chromadb
+from chromadb.config import Settings
 from groq import Groq
 
 # Load environment variables
@@ -13,7 +14,8 @@ load_dotenv()
 
 # Constants
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-JSON_FILE = os.path.join(SCRIPT_DIR, "foods.json")
+PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # Go up one level to alloush_food_rag
+JSON_FILE = os.path.join(PARENT_DIR, "data", "foods.json")
 LLM_MODEL = "llama-3.1-8b-instant"
 GROQ_RATE_LIMIT_WAIT = 1  # seconds between requests if rate limited
 
@@ -26,16 +28,25 @@ except UnicodeDecodeError:
     with open(JSON_FILE, "r", encoding="latin-1") as f:
         food_data = json.load(f)
 
-# Setup Upstash Vector
+# Setup Chroma DB (local vector database)
 try:
-    vector_index = Index(
-        url=os.getenv("UPSTASH_VECTOR_REST_URL"),
-        token=os.getenv("UPSTASH_VECTOR_REST_TOKEN"),
+    # Initialize Chroma client with persistent storage in parent directory
+    chroma_client = chromadb.PersistentClient(path=os.path.join(PARENT_DIR, "chroma_db"))
+    
+    # Try to delete existing collection to avoid dimension mismatch
+    try:
+        chroma_client.delete_collection(name="foods")
+    except:
+        pass  # Collection doesn't exist yet, which is fine
+    
+    # Create fresh collection without pre-specified dimensions
+    vector_index = chroma_client.get_or_create_collection(
+        name="foods",
+        metadata={"hnsw:space": "cosine"}
     )
-    print("[OK] Connected to Upstash Vector")
+    print("[OK] Connected to Chroma DB")
 except Exception as e:
-    print(f"[ERROR] Failed to initialize Upstash Vector: {e}")
-    print("Please ensure UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN are set in .env")
+    print(f"[ERROR] Failed to initialize Chroma DB: {e}")
     vector_index = None
 
 # Setup Groq LLM Client
@@ -49,20 +60,22 @@ except Exception as e:
 
 # Initialize food data in vector database
 def initialize_vector_db():
-    """Verify all food items are in Upstash Vector (embeddings are automatic per BGE model)"""
+    """Verify all food items are in Chroma DB (embeddings are automatic)"""
     if not vector_index:
         print("[ERROR] Vector database not available")
         return False
     
     try:
-        # Check current index status
-        info = vector_index.info()
-        vector_count = info.vector_count if hasattr(info, 'vector_count') else 0
+        # Check current number of documents in collection
+        doc_count = vector_index.count()
         
-        if vector_count == 0:
-            print(f"[INFO] Vector DB is empty. Ingesting {len(food_data)} food items...")
+        if doc_count == 0:
+            print(f"[INFO] Chroma DB is empty. Ingesting {len(food_data)} food items...")
             
-            vectors_to_upsert = []
+            ids = []
+            documents = []
+            metadatas = []
+            
             for i, item in enumerate(food_data):
                 # Enhance text with region/type for better semantic search
                 enriched_text = item.get("text", "")
@@ -71,37 +84,37 @@ def initialize_vector_db():
                 if "type" in item:
                     enriched_text += f" It is a type of {item['type']}."
                 
-                # Use 'data' for auto-embedding, store text in metadata for retrieval
-                vectors_to_upsert.append({
-                    "id": str(i),
-                    "data": enriched_text,  # Upstash will auto-embed this
-                    "metadata": {
-                        "text": enriched_text,  # Store original text for retrieval
-                        "original_id": item.get("id", str(i))
-                    }
+                ids.append(str(i))
+                documents.append(enriched_text)
+                metadatas.append({
+                    "original_id": item.get("id", str(i)),
+                    "region": item.get("region", "Unknown"),
+                    "type": item.get("type", "Unknown")
                 })
             
-            # Upsert in batches
-            batch_size = 10
-            for batch_idx in range(0, len(vectors_to_upsert), batch_size):
-                batch = vectors_to_upsert[batch_idx:batch_idx + batch_size]
-                vector_index.upsert(vectors=batch)
+            # Add documents to Chroma (embeddings are generated automatically)
+            vector_index.add(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas
+            )
             
-            print(f"[OK] Ingested {len(vectors_to_upsert)} items to Upstash Vector")
+            print(f"[OK] Ingested {len(documents)} items to Chroma DB")
             return True
         else:
-            print(f"[OK] Vector DB has {vector_count} vectors ready")
+            print(f"[OK] Chroma DB has {doc_count} documents ready")
             return True
     except Exception as e:
-        print(f"[ERROR] Vector DB initialization: {e}")
+        print(f"[ERROR] Chroma DB initialization: {e}")
         return False
 
 # Initialize vector database with food data
 initialize_vector_db()
 
 # Note: Ollama is no longer needed
-print("[INFO] Ollama has been replaced with Groq Cloud API for LLM generation")
-print("[INFO] Embeddings are handled by Upstash Vector automatically")
+print("[INFO] Using Chroma DB for local vector storage")
+print("[INFO] Using Groq Cloud API for LLM generation")
+print("[INFO] Embeddings are handled by Chroma automatically")
 print("=" * 60)
 
 # RAG query function
@@ -118,35 +131,20 @@ def rag_query(question, gui_callback=None):
         if vector_index:
             try:
                 results = vector_index.query(
-                    data=question,
-                    top_k=3,
-                    include_metadata=True
+                    query_texts=[question],
+                    n_results=3,
+                    include=["documents", "metadatas", "distances"]
                 )
                 
-                if results and len(results) > 0:
-                    top_docs = []
-                    top_scores = []
-                    
-                    # Extract text from QueryResult objects by using ID to look up food_data
-                    for r in results:
-                        try:
-                            # Get text from food_data using the ID
-                            result_id = int(r.id) if hasattr(r, 'id') else None
-                            if result_id is not None and result_id < len(food_data):
-                                food_item = food_data[result_id]
-                                text = food_item.get("text", "")
-                                if "region" in food_item:
-                                    text += f" This food is popular in {food_item['region']}."
-                                if "type" in food_item:
-                                    text += f" It is a type of {food_item['type']}."
-                                
-                                top_docs.append(text)
-                                score = getattr(r, 'score', 0)
-                                top_scores.append(score)
-                        except (ValueError, IndexError, KeyError, TypeError):
-                            continue
+                if results and results["documents"] and len(results["documents"]) > 0:
+                    top_docs = results["documents"][0]  # First query's results
+                    top_distances = results["distances"][0]
                     
                     if top_docs:
+                        # Convert distances to relevance scores (Chroma uses cosine distance)
+                        # Lower distance = higher relevance, convert to 0-1 score
+                        top_scores = [1 - min(d, 1) for d in top_distances]
+                        
                         # Display sources
                         sources_text = "[SOURCES & RELEVANCE]\n"
                         for i, (doc, score) in enumerate(zip(top_docs, top_scores)):
@@ -250,7 +248,7 @@ Answer:"""
 class RAGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("RAG Food Q&A - Upstash + Groq")
+        self.root.title("RAG Food Q&A - Chroma DB + Groq")
         self.root.geometry("1000x700")
         
         # Question input
