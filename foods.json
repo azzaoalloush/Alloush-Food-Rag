@@ -538,5 +538,77 @@
   "text": "Tiramisu is ladyfinger cookies soaked in espresso, layered with whipped mascarpone cream, and chilled until set.",
   "region": "Italy",
   "type": "Dessert"
+},
+{
+  "id": "91",
+  "text": "Som Tam (Green Papaya Salad) is a Thai dish made from shredded unripe papaya, tomatoes, green beans, lime juice, fish sauce, chilies, and peanuts. It is typically prepared by pounding the ingredients in a mortar to release flavors. Nutritionally, it is rich in fiber, vitamin C, and antioxidants, while being low in calories and fat. Regional variations include sweeter versions in Central Thailand and spicier ones in Isan. Dietary tags: Gluten-free, Dairy-free. Allergens: Peanuts, fish sauce.",
+  "region": "Thailand",
+  "type": "Salad"
+},
+{
+  "id": "92",
+  "text": "Dal Tadka is an Indian dish made from yellow lentils cooked with turmeric, onions, tomatoes, and tempered with ghee, cumin, garlic, and chilies. It is simmered until creamy and served with rice or roti. Nutritionally, it is high in plant protein, fiber, folate, and iron. Dal is central to Indian diets, with variations across regions (e.g., spicier in Punjab, coconut-based in South India). Dietary tags: Vegetarian, Gluten-free. Allergens: None (unless ghee is avoided for vegan).",
+  "region": "India",
+  "type": "Main Dish"
+},
+{
+  "id": "93",
+  "text": "Nopalitos Salad is a Mexican dish made from diced cactus paddles, tomatoes, onions, cilantro, lime juice, and sometimes queso fresco. The cactus is boiled or grilled to remove bitterness. Nutritionally, it is rich in fiber, antioxidants, calcium, and vitamin C, while being low in calories. It is a traditional dish in central Mexico, often eaten during Lent. Dietary tags: Vegan (without cheese), Low-calorie. Allergens: Dairy (if cheese added).",
+  "region": "Mexico",
+  "type": "Salad"
+},
+{
+  "id": "94",
+  "text": "Quinoa Salad with Roasted Vegetables is a South American-inspired dish featuring quinoa, roasted bell peppers, zucchini, carrots, olive oil, and lemon dressing. Quinoa is simmered until fluffy, then combined with roasted vegetables for a nutrient-dense meal. Nutritionally, it is high in complete plant protein, fiber, magnesium, and antioxidants. Quinoa originates from the Andes, where it has been cultivated for thousands of years. Regional variations include adding avocado or beans. Dietary tags: Vegan, Gluten-free. Allergens: None.",
+  "region": "South America (Andes)",
+  "type": "Salad"
+},
+{
+  "id": "95",
+  "text": "Grilled Salmon with Dill Yogurt Sauce is a Scandinavian dish featuring salmon fillets grilled until tender, served with a sauce of yogurt, dill, lemon, and garlic. Nutritionally, salmon provides omega-3 fatty acids, vitamin D, and high-quality protein, while yogurt adds probiotics and calcium. Scandinavian cuisine emphasizes fresh fish due to its coastal geography. Variations include serving with boiled potatoes or rye bread. Dietary tags: Pescatarian, High-protein. Allergens: Dairy, fish.",
+  "region": "Scandinavia",
+  "type": "Main Dish"
+},
+{
+  "id": "96",
+  "text": "Mediterranean Lentil Soup is made with lentils, carrots, celery, onions, garlic, olive oil, and herbs like thyme and bay leaf. It is simmered until thick and hearty. Nutritionally, it is rich in plant protein, fiber, folate, and iron, while being low in fat. Lentil soups are common across Mediterranean and Middle Eastern cuisines, often eaten during winter months. Variations include adding spinach or lemon juice for brightness. Dietary tags: Vegan, Gluten-free. Allergens: None.",
+  "region": "Mediterranean",
+  "type": "Soup"
+},
+{
+  "id": "97",
+  "text": "Gyro is a Greek comfort food made from seasoned lamb or chicken cooked on a vertical rotisserie, served in pita bread with tomatoes, onions, and tzatziki sauce. It is grilled for smoky flavor and wrapped for convenience. Gyros became popular in Greece in the 20th century, influenced by Ottoman doner kebabs, and are now a beloved street food across the Mediterranean. Dietary tags: Contains gluten, Dairy. Allergens: Dairy (tzatziki), gluten (pita).",
+  "region": "Greece",
+  "type": "Street Food"
+},
+{
+  "id": "98",
+  "text": "Tamales are a Mexican comfort food made from masa (corn dough) filled with meats, cheese, or chilies, wrapped in corn husks, and steamed. They are labor-intensive, often prepared communally during holidays. Tamales date back to Aztec and Mayan civilizations as portable food for warriors. Regional variations include sweet tamales with raisins or savory ones with mole. Dietary tags: Gluten-free. Allergens: Dairy (if cheese used).",
+  "region": "Mexico",
+  "type": "Main Dish"
+},
+{
+  "id": "99",
+  "text": "Poutine is a Canadian comfort food made from French fries topped with cheese curds and smothered in hot gravy. The fries are deep-fried until crisp, then layered with squeaky cheese curds and rich beef or chicken gravy. Originating in Quebec in the 1950s, it quickly became a national symbol of indulgence. Variations include adding pulled pork, mushrooms, or even foie gras. Dietary tags: Contains gluten, Dairy. Allergens: Dairy, gluten.",
+  "region": "Canada",
+  "type": "Street Food"
+},
+{
+  "id": "100",
+  "text": "Shepherd’s Pie is a British comfort dish made from minced lamb or beef cooked with onions, carrots, peas, and gravy, topped with mashed potatoes and baked until golden. It is hearty and warming, often associated with rural traditions. Shepherd’s Pie dates back to the 18th century as a way to use leftover meat and potatoes. Variations include Cottage Pie (with beef) and vegetarian versions with lentils. Dietary tags: Non-vegetarian. Allergens: Dairy (butter, milk), gluten (gravy).",
+  "region": "United Kingdom",
+  "type": "Main Dish"
+},
+{
+  "id": "101",
+  "text": "Pierogi are Polish dumplings made from dough filled with potatoes, cheese, sauerkraut, or meat, boiled and sometimes pan-fried with butter and onions. They are a beloved comfort food tied to family gatherings and holidays. Pierogi originated in Central and Eastern Europe, with Polish versions becoming iconic. Variations include sweet pierogi with fruit fillings. Dietary tags: Contains gluten, Dairy. Allergens: Gluten, dairy.",
+  "region": "Poland",
+  "type": "Main Dish"
+},
+{
+  "id": "102",
+  "text": "Macaroni and Cheese is a classic American comfort food made from elbow macaroni pasta baked or stovetop-cooked with a creamy cheese sauce, often using cheddar, milk, and butter. The dish is baked until golden or served directly from the pot for a gooey texture. It became popular in the United States in the 19th century, influenced by European pasta-and-cheese recipes, and was famously served by Thomas Jefferson after his travels to France. Regional variations include baked versions with breadcrumbs in the South and stovetop versions in the North. Dietary tags: Contains gluten, Dairy. Allergens: Gluten, dairy.",
+  "region": "United States",
+  "type": "Main Dish"
 }
 ]
