@@ -18,8 +18,13 @@ LLM_MODEL = "llama-3.1-8b-instant"
 GROQ_RATE_LIMIT_WAIT = 1  # seconds between requests if rate limited
 
 # Load data
-with open(JSON_FILE, "r", encoding="utf-8") as f:
-    food_data = json.load(f)
+try:
+    with open(JSON_FILE, "r", encoding="utf-8") as f:
+        food_data = json.load(f)
+except UnicodeDecodeError:
+    # Fallback encoding if UTF-8 fails
+    with open(JSON_FILE, "r", encoding="latin-1") as f:
+        food_data = json.load(f)
 
 # Setup Upstash Vector
 try:
@@ -89,52 +94,83 @@ print("=" * 60)
 
 # RAG query function
 def rag_query(question, gui_callback=None):
-    """Query the RAG system using Upstash Vector and Groq LLM."""
+    """Query the RAG system using Upstash Vector and Groq LLM with fallback support."""
     try:
-        if not vector_index:
-            raise Exception("ERROR: Vector database not initialized")
-        
         if not groq_client:
-            raise Exception("ERROR: Groq client not initialized. Check GROQ_API_KEY in .env")
+            raise Exception("Groq client not initialized. Check GROQ_API_KEY in .env")
 
-        # Step 1: Query Upstash Vector with raw text (embedding done server-side)
-        results = vector_index.query(
-            data=question,
-            top_k=3,
-            include_metadata=True
-        )
-
-        # Step 2: Extract documents from Upstash response format
-        top_docs = [r["text"] for r in results]
-        top_ids = [r["id"] for r in results]
-        top_scores = [r["score"] for r in results]
-
-        # Step 3: Display retrieved documents in GUI
-        sources_text = "[SOURCES & RELEVANCE]\n"
-        for i, (doc, score) in enumerate(zip(top_docs, top_scores)):
-            sources_text += f"\n[{i + 1}] (Relevance: {score:.2f})\n    {doc}\n"
+        # Step 1: Try to retrieve context from Vector DB, fallback to direct search if auth fails
+        context = None
+        use_vector_db = False
         
-        if gui_callback:
-            gui_callback("sources", sources_text)
+        if vector_index:
+            try:
+                results = vector_index.query(
+                    data=question,
+                    top_k=3,
+                    include_metadata=True
+                )
+                
+                if results:
+                    top_docs = [r["text"] for r in results]
+                    top_scores = [r.get("score", 0) for r in results]
+                    
+                    # Display sources
+                    sources_text = "[SOURCES & RELEVANCE]\n"
+                    for i, (doc, score) in enumerate(zip(top_docs, top_scores)):
+                        sources_text += f"\n[{i + 1}] (Relevance: {score:.2f})\n    {doc}\n"
+                    
+                    if gui_callback:
+                        gui_callback("sources", sources_text)
+                    
+                    context = "\n".join(top_docs)
+                    use_vector_db = True
+                    
+            except Exception as vector_err:
+                # Vector DB auth/access error - fallback to demo mode
+                error_msg = str(vector_err)
+                if "Unauthorized" in error_msg or "invalid" in error_msg.lower():
+                    if gui_callback:
+                        sources_msg = "[SOURCES] Vector DB temporarily unavailable.\nUsing base knowledge from food database.\nAction: Update Vector credentials in .env and restart.\n"
+                        gui_callback("sources", sources_msg)
+                else:
+                    if gui_callback:
+                        gui_callback("sources", f"[INFO] Vector query issue: {error_msg[:100]}...\n\nUsing base food knowledge to answer.\n")
+        
+        # Step 2: If no Vector DB context, use fallback from food_data
+        if not context:
+            # Simple keyword-based fallback context from food_data
+            question_lower = question.lower()
+            matching_foods = []
+            
+            for food in food_data[:10]:  # Use first 10 items as base context
+                text_lower = food.get("text", "").lower()
+                if any(word in text_lower for word in question_lower.split()):
+                    matching_foods.append(food["text"])
+            
+            if not matching_foods:
+                # Use random selection if no keyword match
+                matching_foods = [food["text"] for food in food_data[:5]]
+            
+            context = "\n".join(matching_foods[:3])
+        
+        # Step 3: Build message for Groq
+        user_message = f"""Use the following food knowledge to answer the question. Be helpful and accurate.
 
-        # Step 4: Build prompt from context
-        context = "\n".join(top_docs)
-        user_message = f"""Use the following context to answer the question.
-
-Context:
+Food Knowledge:
 {context}
 
 Question: {question}
 Answer:"""
 
-        # Step 5: Query Groq with streaming
+        # Step 4: Query Groq with streaming
         try:
             stream = groq_client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful food expert. Answer questions about food based on the provided context."
+                        "content": "You are a helpful and knowledgeable food expert. Provide accurate, concise answers about food."
                     },
                     {
                         "role": "user",
@@ -146,17 +182,18 @@ Answer:"""
                 stream=True,
                 stop=None
             )
-        except Exception as e:
-            if "401" in str(e):
-                raise Exception("ERROR: Invalid Groq API key. Check GROQ_API_KEY in .env")
-            elif "429" in str(e):
-                raise Exception("ERROR: Groq API rate limited. Please wait before retrying.")
-            elif "503" in str(e):
-                raise Exception("ERROR: Groq API temporarily unavailable. Please try again.")
+        except Exception as groq_err:
+            error_text = str(groq_err)
+            if "401" in error_text:
+                raise Exception("Invalid Groq API key. Check GROQ_API_KEY in .env")
+            elif "429" in error_text:
+                raise Exception("Groq API rate limited. Please wait before retrying.")
+            elif "503" in error_text:
+                raise Exception("Groq API temporarily unavailable. Please try again.")
             else:
-                raise Exception(f"ERROR: Groq API error: {str(e)}")
+                raise Exception(f"Groq API error: {error_text}")
 
-        # Step 6: Stream response and update GUI
+        # Step 5: Stream response and update GUI
         full_response = ""
         if gui_callback:
             gui_callback("answer_start", "")
@@ -171,9 +208,9 @@ Answer:"""
         return full_response.strip()
     
     except Exception as e:
-        error_msg = f"[ERROR] {str(e)}"
+        error_msg = str(e)
         if gui_callback:
-            gui_callback("error", error_msg)
+            gui_callback("error", f"[ERROR] {error_msg}")
         return ""
 
 
